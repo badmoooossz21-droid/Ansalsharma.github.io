@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Truth or Dare — Playable Web Version</title>
+  <style>
+    :root{--bg:#0f1724;--card:#111827;--accent:#ff6b6b;--muted:#94a3b8;--glass:rgba(255,255,255,0.04)}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial;display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(180deg,#071028 0%, #071a2a 100%);color:#e6eef8}
+    .container{width:min(900px,96%);padding:28px;border-radius:14px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));box-shadow:0 8px 30px rgba(2,6,23,0.6)}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+    h1{font-size:20px;margin:0}
+    p.lead{margin:6px 0 0;color:var(--muted);font-size:13px}
+
+    .grid{display:grid;grid-template-columns:280px 1fr;gap:18px}
+    .card{background:var(--card);padding:14px;border-radius:12px;box-shadow:inset 0 1px 0 rgba(255,255,255,0.02)}
+
+    label{display:block;font-size:13px;color:var(--muted);margin-bottom:8px}
+    input[type=text], select, textarea{width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:var(--glass);color:inherit}
+    button{background:var(--accent);border:0;padding:10px 14px;border-radius:10px;color:#fff;font-weight:600;cursor:pointer}
+    .btn-ghost{background:transparent;border:1px solid rgba(255,255,255,0.06)}
+
+    .controls{display:flex;gap:10px;flex-wrap:wrap}
+    .list{max-height:340px;overflow:auto;margin-top:10px}
+    .list-item{padding:8px;border-radius:8px;background:linear-gradient(180deg, rgba(255,255,255,0.01), transparent);display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+    .result{min-height:120px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700}
+    footer{margin-top:14px;color:var(--muted);font-size:12px;text-align:center}
+
+    @media (max-width:720px){.grid{grid-template-columns:1fr;}.container{padding:16px}}
+  </style>
+</head>
+<body>
+  <div class="container" role="main">
+    <header>
+      <div>
+        <h1>Truth or Dare — Web Game</h1>
+        <p class="lead">Quick, mobile-friendly truth or dare. Add your own prompts and play with friends.</p>
+      </div>
+      <div>
+        <small id="playerLabel">Player: <strong id="playerName">Player 1</strong></small>
+      </div>
+    </header>
+
+    <div class="grid">
+      <aside class="card" aria-labelledby="settingsTitle">
+        <h3 id="settingsTitle">Settings</h3>
+        <label for="playerInput">Player name</label>
+        <input id="playerInput" type="text" placeholder="Enter player name" />
+
+        <label for="modeSelect" style="margin-top:10px">Mode</label>
+        <select id="modeSelect">
+          <option value="mixed">Mixed (Truth or Dare)</option>
+          <option value="truth">Truth only</option>
+          <option value="dare">Dare only</option>
+        </select>
+
+        <div style="margin-top:12px" class="controls">
+          <button id="askBtn">Ask Me</button>
+          <button id="resetBtn" class="btn-ghost">Reset Lists</button>
+        </div>
+
+        <h4 style="margin-top:14px">Add custom prompt</h4>
+        <label for="typeSelect">Type</label>
+        <select id="typeSelect"><option value="truth">Truth</option><option value="dare">Dare</option></select>
+        <label for="promptInput">Prompt</label>
+        <input id="promptInput" type="text" placeholder="e.g. What's your most embarrassing moment?" />
+        <div style="margin-top:10px;display:flex;gap:10px">
+          <button id="addPromptBtn" class="btn-ghost">Add to list</button>
+          <button id="addSampleBtn">Add sample prompts</button>
+        </div>
+
+        <h4 style="margin-top:12px">Current Prompts</h4>
+        <div class="list" id="promptList" aria-live="polite"></div>
+      </aside>
+
+      <section class="card">
+        <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px">
+          <button id="truthBtn" class="btn-ghost">Truth</button>
+          <button id="dareBtn" class="btn-ghost">Dare</button>
+          <button id="shuffleBtn" class="btn-ghost">Shuffle & Random</button>
+          <div style="margin-left:auto;text-align:right">
+            <div style="font-size:12px;color:var(--muted)">Last picked</div>
+            <div id="lastPicked" style="font-weight:600">—</div>
+          </div>
+        </div>
+
+        <div class="result" id="resultArea">Press <strong>Ask Me</strong> or choose a type</div>
+
+        <div style="margin-top:14px;display:flex;gap:10px;align-items:center">
+          <button id="copyBtn" class="btn-ghost">Copy prompt</button>
+          <button id="exportBtn" class="btn-ghost">Export prompts</button>
+          <button id="importBtn" class="btn-ghost">Import prompts</button>
+        </div>
+
+        <footer>
+          Tip: Tap a prompt in the left column to remove it.
+        </footer>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    // Default sample prompts
+    const defaultTruths = [
+      "What's your most embarrassing childhood memory?",
+      "Have you ever told a lie to get out of trouble?",
+      "What's one secret you haven't told your best friend?",
+      "Who was your first crush?"
+    ];
+    const defaultDares = [
+      "Sing the chorus of your favorite song out loud.",
+      "Do 10 jumping jacks.",
+      "Send a silly selfie to the last person you texted.",
+      "Do your best celebrity impression for 30 seconds."
+    ];
+
+    // State
+    let truths = [...defaultTruths];
+    let dares = [...defaultDares];
+    let lastPicked = '';
+
+    // Elements
+    const promptList = document.getElementById('promptList');
+    const resultArea = document.getElementById('resultArea');
+    const playerInput = document.getElementById('playerInput');
+    const playerName = document.getElementById('playerName');
+    const playerLabel = document.getElementById('playerLabel');
+    const modeSelect = document.getElementById('modeSelect');
+    const askBtn = document.getElementById('askBtn');
+    const truthBtn = document.getElementById('truthBtn');
+    const dareBtn = document.getElementById('dareBtn');
+    const shuffleBtn = document.getElementById('shuffleBtn');
+    const addPromptBtn = document.getElementById('addPromptBtn');
+    const promptInput = document.getElementById('promptInput');
+    const typeSelect = document.getElementById('typeSelect');
+    const resetBtn = document.getElementById('resetBtn');
+    const addSampleBtn = document.getElementById('addSampleBtn');
+    const lastPickedDiv = document.getElementById('lastPicked');
+    const copyBtn = document.getElementById('copyBtn');
+    const exportBtn = document.getElementById('exportBtn');
+    const importBtn = document.getElementById('importBtn');
+
+    function renderList(){
+      promptList.innerHTML = '';
+      const makeItem = (text, kind, idx) => {
+        const el = document.createElement('div');
+        el.className = 'list-item';
+        el.innerHTML = `<div style="flex:1">${escapeHtml(text)}</div><div style="margin-left:12px;color:var(--muted);font-size:13px">${kind}</div>`;
+        el.title = 'Click to remove this prompt';
+        el.onclick = () => {
+          if(confirm('Remove this prompt?')){
+            if(kind === 'Truth') truths.splice(idx,1); else dares.splice(idx,1);
+            renderList();
+          }
+        };
+        return el;
+      };
+
+      truths.forEach((t,i)=> promptList.appendChild(makeItem(t,'Truth',i)));
+      dares.forEach((d,i)=> promptList.appendChild(makeItem(d,'Dare',i)));
+
+      if(truths.length===0 && dares.length===0){
+        promptList.innerHTML = '<div style="color:var(--muted);font-size:13px">No prompts — add some or click "Add sample prompts".</div>';
+      }
+    }
+
+    function escapeHtml(s){return s.replace(/[&<>"']/g, m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]))}
+
+    function pick(kind){
+      let list = (kind === 'Truth') ? truths : dares;
+      if(list.length===0){ resultArea.textContent = `No ${kind.toLowerCase()}s available.`; return; }
+      // random
+      const idx = Math.floor(Math.random()*list.length);
+      lastPicked = `${kind}: ${list[idx]}`;
+      lastPickedDiv.textContent = lastPicked;
+      resultArea.textContent = list[idx];
+    }
+
+    function askRandom(){
+      const mode = modeSelect.value;
+      if(mode === 'truth'){ pick('Truth'); }
+      else if(mode === 'dare'){ pick('Dare'); }
+      else {
+        // mixed — 50/50
+        const which = Math.random() < 0.5 ? 'Truth' : 'Dare';
+        pick(which);
+      }
+    }
+
+    // Events
+    askBtn.onclick = () => askRandom();
+    truthBtn.onclick = () => pick('Truth');
+    dareBtn.onclick = () => pick('Dare');
+    shuffleBtn.onclick = () => {
+      // Fisher-Yates shuffle both lists and pick random
+      const shuffle = (arr)=>{ for(let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]] } };
+      shuffle(truths); shuffle(dares); askRandom(); renderList();
+    };
+
+    addPromptBtn.onclick = ()=>{
+      const text = promptInput.value.trim();
+      if(!text){ alert('Enter a prompt first.'); promptInput.focus(); return; }
+      if(typeSelect.value === 'truth') truths.push(text); else dares.push(text);
+      promptInput.value = '';
+      renderList();
+    };
+
+    addSampleBtn.onclick = ()=>{ truths = truths.concat(defaultTruths); dares = dares.concat(defaultDares); renderList(); };
+
+    resetBtn.onclick = ()=>{
+      if(confirm('Reset to the original sample prompts? This will remove custom prompts.')){
+        truths = [...defaultTruths]; dares = [...defaultDares]; renderList(); lastPickedDiv.textContent = '—'; resultArea.textContent = 'Lists reset.';
+      }
+    };
+
+    playerInput.oninput = ()=>{ playerName.textContent = playerInput.value || 'Player 1'; };
+
+    copyBtn.onclick = ()=>{
+      const text = resultArea.textContent;
+      if(!text) return alert('Nothing to copy.');
+      navigator.clipboard?.writeText(text).then(()=>alert('Prompt copied to clipboard'), ()=>alert('Unable to copy.'));
+    };
+
+    exportBtn.onclick = ()=>{
+      const data = {truths,dares};
+      const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'prompts.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    };
+
+    importBtn.onclick = ()=>{
+      const input = document.createElement('input'); input.type='file'; input.accept='application/json';
+      input.onchange = e=>{
+        const file = e.target.files[0]; if(!file) return;
+        const reader = new FileReader();
+        reader.onload = evt=>{
+          try{
+            const parsed = JSON.parse(evt.target.result);
+            if(Array.isArray(parsed.truths) && Array.isArray(parsed.dares)){
+              truths = parsed.truths.slice(); dares = parsed.dares.slice(); renderList();
+            } else alert('JSON must contain two arrays: truths and dares');
+          } catch(err){ alert('Invalid JSON file.');
+        };
+        reader.readAsText(file);
+      };
+      input.click();
+    };
+
+    renderList();
+  </script>
+</body>
+</html>
